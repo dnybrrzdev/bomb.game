@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Buscaminas</title>
+  <style>
+    /* Estilos básicos para el layout */
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e1e;
+      color: #fff;
+      text-align: center;
+      padding: 20px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    #game {
+      display: grid;
+      margin: 20px auto;
+      border: 3px solid #fff;
+      width: max-content;
+    }
+
+    .cell {
+      width: 30px;
+      height: 30px;
+      background-color: #333;
+      border: 1px solid #555;
+      font-size: 16px;
+      line-height: 30px;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .cell.revealed {
+      background-color: #ddd;
+      color: #000;
+      cursor: default;
+    }
+
+    .cell.mine {
+      background-color: red;
+    }
+
+    .cell.flag {
+      background-color: yellow;
+    }
+
+    #status {
+      margin-top: 20px;
+      font-weight: bold;
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧨 Buscaminas</h1>
+  <div id="status">Haz clic en una celda para comenzar</div>
+  <div id="game"></div>
+  <button onclick="startGame()">Reiniciar</button>
+
+  <script>
+    // Configuración inicial del tablero
+    const rows = 10; // Filas
+    const cols = 10; // Columnas
+    const minesCount = 15; // Número de minas
+
+    let board = [];
+    let gameOver = false;
+
+    // Inicializa el juego
+    function startGame() {
+      board = [];
+      gameOver = false;
+      document.getElementById('status').textContent = "Haz clic en una celda para comenzar";
+      generateBoard();
+    }
+
+    // Genera el tablero y lo renderiza en pantalla
+    function generateBoard() {
+      const gameContainer = document.getElementById('game');
+      gameContainer.innerHTML = '';
+      gameContainer.style.gridTemplateColumns = `repeat(${cols}, 30px)`;
+
+      // Crear una matriz vacía
+      for (let r = 0; r < rows; r++) {
+        const row = [];
+        for (let c = 0; c < cols; c++) {
+          row.push({ revealed: false, mine: false, flag: false, adjacent: 0 });
+        }
+        board.push(row);
+      }
+
+      // Colocar minas aleatoriamente
+      let placedMines = 0;
+      while (placedMines < minesCount) {
+        const r = Math.floor(Math.random() * rows);
+        const c = Math.floor(Math.random() * cols);
+        if (!board[r][c].mine) {
+          board[r][c].mine = true;
+          placedMines++;
+        }
+      }
+
+      // Calcular números de minas adyacentes
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (!board[r][c].mine) {
+            board[r][c].adjacent = countAdjacentMines(r, c);
+          }
+        }
+      }
+
+      // Crear elementos HTML para cada celda
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const cell = document.createElement('div');
+          cell.classList.add('cell');
+          cell.dataset.row = r;
+          cell.dataset.col = c;
+
+          // Clic izquierdo: revelar celda
+          cell.addEventListener('click', () => handleClick(r, c));
+
+          // Clic derecho: poner bandera
+          cell.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            toggleFlag(r, c);
+          });
+
+          gameContainer.appendChild(cell);
+        }
+      }
+    }
+
+    // Cuenta las minas adyacentes a una celda
+    function countAdjacentMines(r, c) {
+      let count = 0;
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const nr = r + i, nc = c + j;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && board[nr][nc].mine) {
+            count++;
+          }
+        }
+      }
+      return count;
+    }
+
+    // Maneja el clic izquierdo
+    function handleClick(r, c) {
+      if (gameOver || board[r][c].revealed || board[r][c].flag) return;
+
+      const cell = board[r][c];
+      cell.revealed = true;
+
+      const div = document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
+      div.classList.add('revealed');
+
+      if (cell.mine) {
+        div.classList.add('mine');
+        div.textContent = '💣';
+        endGame(false);
+        return;
+      }
+
+      if (cell.adjacent > 0) {
+        div.textContent = cell.adjacent;
+      } else {
+        // Si no hay minas adyacentes, revela celdas vecinas
+        revealEmptyCells(r, c);
+      }
+
+      checkWin();
+    }
+
+    // Revela celdas vecinas vacías
+    function revealEmptyCells(r, c) {
+      for (let i = -1; i <= 1; i++) {
+        for (let j = -1; j <= 1; j++) {
+          const nr = r + i, nc = c + j;
+          if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+            const neighbor = board[nr][nc];
+            if (!neighbor.revealed && !neighbor.mine && !neighbor.flag) {
+              neighbor.revealed = true;
+              const div = document.querySelector(`.cell[data-row='${nr}'][data-col='${nc}']`);
+              div.classList.add('revealed');
+              if (neighbor.adjacent > 0) {
+                div.textContent = neighbor.adjacent;
+              } else {
+                revealEmptyCells(nr, nc);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Clic derecho: alterna bandera en celda
+    function toggleFlag(r, c) {
+      if (gameOver || board[r][c].revealed) return;
+      const cell = board[r][c];
+      cell.flag = !cell.flag;
+      const div = document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
+      div.classList.toggle('flag');
+      div.textContent = cell.flag ? '🚩' : '';
+    }
+
+    // Verifica si el jugador ganó
+    function checkWin() {
+      let revealedCount = 0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c].revealed) revealedCount++;
+        }
+      }
+      if (revealedCount === rows * cols - minesCount) {
+        endGame(true);
+      }
+    }
+
+    // Finaliza el juego con resultado (win/lose)
+    function endGame(won) {
+      gameOver = true;
+      document.getElementById('status').textContent = won ? "🎉 ¡Ganaste!" : "💥 ¡Perdiste!";
+      // Revelar todas las minas
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (board[r][c].mine) {
+            const div = document.querySelector(`.cell[data-row='${r}'][data-col='${c}']`);
+            div.classList.add('revealed', 'mine');
+            div.textContent = '💣';
+          }
+        }
+      }
+    }
+
+    // Comenzar al cargar
+    startGame();
+  </script>
+</body>
+</html>
